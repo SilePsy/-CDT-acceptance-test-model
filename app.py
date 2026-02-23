@@ -71,62 +71,88 @@ def cargar_modelos_y_transformadores():
 
 
 def transformar_datos(df, transformadores):
-    """Aplica todas las transformaciones al dataframe de entrada"""
+    """Aplica todas las transformaciones al dataframe de entrada
+    Genera exactamente las 18 variables que espera el modelo LightGBM filtrado
+    """
     
     encoders = transformadores['encoders']
     ohe = transformadores['ohe']
     scaler_edad = transformadores['scaler_edad']
     scaler_saldo = transformadores['scaler_saldo']
-    quintiles_generador = transformadores['quintiles_generador']
     ohe_quintiles = transformadores['ohe_quintiles']
+    features_list = transformadores['features_list']
     
     df_processed = df.copy()
     
-    # 1. Aplicar LabelEncoder a variables binarias
-    variables_binarias = ['profesi', 'estcivil']
+    # 1. Aplicar LabelEncoder a variables binarias (tiene_vivienda, tiene_prestamo)
+    variables_binarias = ['tiene_vivienda', 'tiene_prestamo']
     for var in variables_binarias:
         if var in df_processed.columns and var in encoders:
             df_processed[var] = encoders[var].transform(df_processed[var])
     
-    # 2. Aplicar OneHotEncoder
-    variables_categoricas = ['canalprim', 'rentero', 'nivelacd']
+    # 2. Aplicar OneHotEncoder a variables categóricas (trabajo, estado_civil, educacion)
+    variables_categoricas = ['trabajo', 'estado_civil', 'educacion']
     if all(var in df_processed.columns for var in variables_categoricas):
         ohe_encoded = ohe.transform(df_processed[variables_categoricas])
         ohe_feature_names = ohe.get_feature_names_out(variables_categoricas)
         df_ohe = pd.DataFrame(ohe_encoded, columns=ohe_feature_names, index=df_processed.index)
         df_processed = pd.concat([df_processed.drop(variables_categoricas, axis=1), df_ohe], axis=1)
     
-    # 3. Escalar edad y saldo
+    # 3. Escalar edad y saldo (reemplazar columnas originales)
     if 'edad' in df_processed.columns:
-        df_processed['edad_escalada'] = scaler_edad.transform(df_processed[['edad']])
+        df_processed['edad'] = scaler_edad.transform(df_processed[['edad']])
     
     if 'saldo' in df_processed.columns:
-        df_processed['saldo_escalado'] = scaler_saldo.transform(df_processed[['saldo']])
+        df_processed['saldo'] = scaler_saldo.transform(df_processed[['saldo']])
     
-    # 4. Crear quintiles
-    variables_quintiles = ['cant_productos', 'meses_cliente']
-    if all(var in df_processed.columns for var in variables_quintiles):
-        quintiles = pd.cut(df_processed['cant_productos'], bins=5, labels=False, duplicates='drop')
-        quintiles_meses = pd.cut(df_processed['meses_cliente'], bins=5, labels=False, duplicates='drop')
-        
-        # OneHotEncode los quintiles
-        quintiles_combined = pd.DataFrame({
-            'cant_productos_quintil': quintiles,
-            'meses_cliente_quintil': quintiles_meses
-        })
-        
-        if len(quintiles_combined.columns) > 0:
-            quintiles_encoded = ohe_quintiles.transform(quintiles_combined)
-            quintiles_ohe_names = ohe_quintiles.get_feature_names_out(['cant_productos_quintil', 'meses_cliente_quintil'])
-            df_quintiles = pd.DataFrame(quintiles_encoded, columns=quintiles_ohe_names, index=df_processed.index)
-            df_processed = pd.concat([df_processed, df_quintiles], axis=1)
+    # 4. Crear variable derivada: norm_cant_productos = (tiene_vivienda + tiene_prestamo) / 2
+    df_processed['norm_cant_productos'] = (df_processed['tiene_vivienda'] + df_processed['tiene_prestamo']) / 2
     
-    # 5. Crear variables derivadas
-    if 'cant_productos' in df_processed.columns:
-        df_processed['norm_cant_productos'] = df_processed['cant_productos'] / df_processed['cant_productos'].max()
+    # 5. Crear variable derivada: edad_saldo (producto de edad y saldo escalados)
+    df_processed['edad_saldo'] = df_processed['edad'] * df_processed['saldo']
     
-    if 'edad_escalada' in df_processed.columns and 'saldo_escalado' in df_processed.columns:
-        df_processed['edad_saldo_interaction'] = df_processed['edad_escalada'] * df_processed['saldo_escalado']
+    # 6. Crear quintiles de edad y saldo usando pd.cut con bins: [0, 0.2, 0.4, 0.6, 0.8, 1.0]
+    # Ya que edad y saldo están escalados en [0,1], podemos usar bins uniformes
+    bins_quintiles = [0, 0.2, 0.4, 0.6, 0.8, 1.0000001]  # 1.0000001 para incluir el 1.0
+    labels_quintiles = ['Q1_Muy_Bajo', 'Q2_Bajo', 'Q3_Medio', 'Q4_Alto', 'Q5_Muy_Alto']
+    
+    quintil_edad = pd.cut(df_processed['edad'], bins=bins_quintiles, labels=labels_quintiles, include_lowest=True)
+    quintil_saldo = pd.cut(df_processed['saldo'], bins=bins_quintiles, labels=labels_quintiles, include_lowest=True)
+    
+    # Renombrar etiquetas para que coincidan con el OneHotEncoder
+    quintil_edad = quintil_edad.astype(str).str.replace('Q1_Muy_Bajo', 'Q1_Edad_Muy_Bajo')\
+                                       .str.replace('Q2_Bajo', 'Q2_Edad_Bajo')\
+                                       .str.replace('Q3_Medio', 'Q3_Edad_Medio')\
+                                       .str.replace('Q4_Alto', 'Q4_Edad_Alto')\
+                                       .str.replace('Q5_Muy_Alto', 'Q5_Edad_Muy_Alto')
+    
+    quintil_saldo = quintil_saldo.astype(str).str.replace('Q1_Muy_Bajo', 'Q1_Saldo_Muy_Bajo')\
+                                        .str.replace('Q2_Bajo', 'Q2_Saldo_Bajo')\
+                                        .str.replace('Q3_Medio', 'Q3_Saldo_Medio')\
+                                        .str.replace('Q4_Alto', 'Q4_Saldo_Alto')\
+                                        .str.replace('Q5_Muy_Alto', 'Q5_Saldo_Muy_Alto')
+    
+    # Crear dataframe con quintiles (nombres DEBEN coincidir con lo entrenado)
+    quintiles_df = pd.DataFrame({
+        'quintil_edad': quintil_edad,
+        'quintil_saldo': quintil_saldo
+    }, index=df_processed.index)
+    
+    # Aplicar OneHotEncoder a quintiles
+    quintiles_encoded = ohe_quintiles.transform(quintiles_df)
+    quintiles_feature_names = ohe_quintiles.get_feature_names_out(['quintil_edad', 'quintil_saldo'])
+    df_quintiles = pd.DataFrame(quintiles_encoded, columns=quintiles_feature_names, index=df_processed.index)
+    
+    # Combinar todo
+    df_processed = pd.concat([df_processed, df_quintiles], axis=1)
+    
+    # Eliminar columnas que no se usan en el modelo
+    cols_a_mantener = set(features_list)
+    cols_actuales = set(df_processed.columns)
+    cols_a_eliminar = cols_actuales - cols_a_mantener
+    
+    if cols_a_eliminar:
+        df_processed = df_processed.drop(columns=list(cols_a_eliminar))
     
     return df_processed
 
@@ -184,11 +210,11 @@ def hacer_prediccion(df_input, transformadores):
 # ============================================
 
 # Header
-st.title("💰 Predictor de Incumplimiento de Depósitos")
+st.title("💰 Predictor de Depósitos Bancarios")
 st.markdown("---")
 st.markdown("""
-Sistema inteligente de predicción basado en **LightGBM** para evaluar el riesgo 
-de incumplimiento de depósitos bancarios.
+Sistema inteligente de predicción basado en **LightGBM** para evaluar la probabilidad
+de que un cliente contrate un depósito a plazo fijo.
 """)
 
 # Sidebar - Información del modelo
@@ -201,13 +227,14 @@ with st.sidebar:
     - **Variables**: 18 características seleccionadas
     - **Métrica**: ROC-AUC = 0.6680
     - **Validación**: 10-Fold Cross-Validation
-    - **Clase**: Incumplimiento (Binario)
+    - **Objetivo**: Propensión a contratar depósitos
     """)
     
     st.subheader("Sobre el modelo")
     st.markdown("""
     Este modelo fue entrenado con datos históricos de clientes bancarios
-    para predecir la probabilidad de incumplimiento en depósitos.
+    para predecir la probabilidad de que un cliente contrate un depósito
+    a plazo fijo en base a sus características demográficas y bancarias.
     
     **Nota**: Las predicciones son estimaciones estadísticas basadas en
     patrones históricos y no deben considerarse como garantías.
@@ -227,7 +254,7 @@ tab1, tab2, tab3 = st.tabs(["🎯 Predicción Individual", "📤 Predicción en 
 # ============================================
 with tab1:
     st.header("Predicción Individual")
-    st.markdown("Completa los datos del cliente y haz clic en el botón de predicción")
+    st.markdown("Ingresa los datos del cliente para predecir la propensión a contratar depósitos")
     st.markdown("---")
     
     col1, col2 = st.columns(2)
@@ -235,17 +262,19 @@ with tab1:
     with col1:
         st.subheader("📋 Datos Personales")
         
-        profesi = st.selectbox(
-            "👨‍💼 Profesión",
-            options=["Empleado", "Empresa"],
+        trabajo = st.selectbox(
+            "👨‍💼 Ocupación",
+            options=["administrador", "autonomo", "desempleado", "empleada_hogar", 
+                    "empresario", "estudiante", "gestion", "jubilado", "obrero", 
+                    "servicios", "tecnico", "desconocido"],
             index=0,
             help="Tipo de ocupación del cliente"
         )
         
-        estcivil = st.selectbox(
+        estado_civil = st.selectbox(
             "💍 Estado Civil",
-            options=["Soltero", "Casado", "Divorciado", "Viudo"],
-            index=0,
+            options=["casado", "divorciado", "soltero"],
+            index=2,
             help="Estado civil actual"
         )
         
@@ -261,59 +290,39 @@ with tab1:
     with col2:
         st.subheader("🏦 Datos Bancarios")
         
-        canalprim = st.selectbox(
-            "📱 Canal Principal",
-            options=["Sucursal", "Internet", "Teléfono", "Móvil"],
-            index=0,
-            help="Canal principal de contacto"
+        educacion = st.selectbox(
+            "🎓 Educación",
+            options=["primaria", "secundaria", "terciaria", "desconocida"],
+            index=1,
+            help="Nivel educativo"
         )
         
-        rentero = st.selectbox(
-            "🏠 Rentero",
-            options=["No", "Sí"],
+        tiene_vivienda = st.selectbox(
+            "🏠 Tiene Vivienda",
+            options=["no", "si"],
             index=0,
-            help="¿Es rentero?"
+            help="¿Tiene vivienda?"
         )
         
-        nivelacd = st.selectbox(
-            "🎖️ Nivel de Acceso",
-            options=["Básico", "Premium", "Gold"],
+        tiene_prestamo = st.selectbox(
+            "💳 Tiene Préstamo",
+            options=["no", "si"],
             index=0,
-            help="Nivel de acceso a servicios"
+            help="¿Tiene préstamo activo?"
         )
     
     st.markdown("---")
     
-    col3, col4, col5 = st.columns(3)
+    col3, col4 = st.columns(2)
     
     with col3:
-        cant_productos = st.number_input(
-            "📦 Cantidad de Productos",
-            min_value=1,
-            max_value=20,
-            value=3,
-            step=1,
-            help="Número de productos bancarios"
-        )
-    
-    with col4:
         saldo = st.number_input(
-            "💵 Saldo (miles)",
+            "💵 Saldo (euros)",
             min_value=0,
-            max_value=1000000,
-            value=50000,
-            step=1000,
-            help="Saldo en la cuenta (en miles)"
-        )
-    
-    with col5:
-        meses_cliente = st.number_input(
-            "⏱️ Meses Cliente",
-            min_value=1,
-            max_value=600,
-            value=24,
-            step=1,
-            help="Meses como cliente del banco"
+            max_value=300000,
+            value=1500,
+            step=100,
+            help="Saldo en la cuenta (en euros)"
         )
     
     # Botón de predicción centrado
@@ -330,15 +339,13 @@ with tab1:
     if predict_button:
         # Crear DataFrame con los datos ingresados
         df_entrada = pd.DataFrame({
-            'profesi': [profesi],
-            'estcivil': [estcivil],
+            'trabajo': [trabajo],
+            'estado_civil': [estado_civil],
+            'educacion': [educacion],
             'edad': [edad],
-            'canalprim': [canalprim],
-            'rentero': [rentero],
-            'nivelacd': [nivelacd],
-            'cant_productos': [cant_productos],
-            'saldo': [saldo],
-            'meses_cliente': [meses_cliente]
+            'tiene_vivienda': [tiene_vivienda],
+            'tiene_prestamo': [tiene_prestamo],
+            'saldo': [saldo]
         })
         
         # Hacer predicción
@@ -362,9 +369,9 @@ with tab1:
             
             with col_res2:
                 st.metric(
-                    "Probabilidad de Incumplimiento",
+                    "Probabilidad de Depósito",
                     f"{resultado['probabilidad']:.2%}",
-                    delta=f"Cumplimiento: {(1-resultado['probabilidad']):.2%}"
+                    delta=f"Sin depósito: {(1-resultado['probabilidad']):.2%}"
                 )
             
             with col_res3:
@@ -408,52 +415,77 @@ with tab1:
             
             datos_resumen = pd.DataFrame({
                 'Variable': [
-                    'Profesión',
+                    'Ocupación',
                     'Estado Civil',
+                    'Educación',
                     'Edad',
-                    'Canal',
-                    'Rentero',
-                    'Nivel Acceso',
-                    'Productos',
-                    'Saldo',
-                    'Meses Cliente'
+                    'Tiene Vivienda',
+                    'Tiene Préstamo',
+                    'Saldo'
                 ],
                 'Valor': [
-                    profesi,
-                    estcivil,
+                    trabajo,
+                    estado_civil,
+                    educacion,
                     f"{edad} años",
-                    canalprim,
-                    rentero,
-                    nivelacd,
-                    cant_productos,
-                    f"${saldo:,}",
-                    f"{meses_cliente} meses"
+                    tiene_vivienda,
+                    tiene_prestamo,
+                    f"€{saldo:,}"
                 ]
             })
             
             st.dataframe(datos_resumen, use_container_width=True, hide_index=True)
             
+            # Gráfico de probabilidad
+            st.markdown("---")
+            st.subheader("📊 Distribución de Probabilidades")
+            
+            prob_deposito = resultado['probabilidad']
+            prob_no_deposito = 1 - resultado['probabilidad']
+            
+            fig, ax = plt.subplots(figsize=(8, 6))
+            
+            colores = ['#e74c3c', '#2ecc71']
+            valores = [prob_no_deposito, prob_deposito]
+            labels = [
+                f'Sin Depósito\n{prob_no_deposito:.1%}',
+                f'Con Depósito\n{prob_deposito:.1%}'
+            ]
+            
+            wedges, texts, autotexts = ax.pie(
+                valores,
+                labels=labels,
+                colors=colores,
+                autopct='%1.1f%%',
+                startangle=90,
+                textprops={'fontsize': 12, 'weight': 'bold'}
+            )
+            
+            ax.set_title('Probabilidades Predichas', fontsize=14, weight='bold', pad=20)
+            
+            st.pyplot(fig)
+            
             # Recomendación
             st.markdown("---")
             st.subheader("💡 Recomendación")
             
-            if resultado['clase'] == 0:
+            if resultado['clase'] == 1:
                 st.success(f"""
-                ✅ **BAJO RIESGO - CUMPLIMIENTO (SÍ)**
+                ✅ **ALTA PROPENSIÓN - CONTRATARÁ DEPÓSITO (SÍ)**
                 
-                El cliente tiene un perfil de bajo riesgo según el modelo.
-                Probabilidad de cumplimiento: **{prob_cumplimiento:.1%}**
+                El cliente tiene un perfil con alta probabilidad de contratar depósito.
+                Probabilidad: **{prob_deposito:.1%}**
                 
-                Se recomienda autorizar el depósito.
+                Se recomienda realizar seguimiento y oferta personalizada.
                 """)
             else:
-                st.error(f"""
-                ⚠️ **ALTO RIESGO - INCUMPLIMIENTO (NO)**
+                st.warning(f"""
+                ⚠️ **BAJA PROPENSIÓN - NO CONTRATARÁ DEPÓSITO (NO)**
                 
-                El cliente presenta señales de riesgo elevado.
-                Probabilidad de incumplimiento: **{prob_incumplimiento:.1%}**
+                El cliente no muestra propensión a contratar depósito.
+                Probabilidad: **{prob_deposito:.1%}**
                 
-                Se recomienda revisar caso manualmente o aplicar condiciones especiales.
+                Se recomienda trabajo en relación con el cliente antes de ofrecer depósitos.
                 """)
 
 
@@ -468,8 +500,7 @@ with tab2:
     El archivo debe contener las siguientes columnas:
     """)
     
-    st.code("""profesi, estcivil, edad, canalprim, rentero, nivelacd, 
-cant_productos, saldo, meses_cliente""")
+    st.code("""trabajo, estado_civil, educacion, edad, tiene_vivienda, tiene_prestamo, saldo""")
     
     uploaded_file = st.file_uploader("Selecciona archivo CSV", type="csv")
     
@@ -543,10 +574,12 @@ with tab3:
     st.subheader("1️⃣ Descripción del Modelo")
     st.markdown("""
     Este modelo utiliza **LightGBM**, un algoritmo de Gradient Boosting altamente eficiente,
-    entrenado con 29,847 registros de clientes para predecir el incumplimiento de depósitos.
+    entrenado con 29,847 registros de clientes bancarios para predecir la probabilidad de 
+    contratar un depósito a plazo fijo.
     
     **Características principales:**
-    - 18 variables seleccionadas tras análisis de importancia
+    - 18 variables seleccionadas tras análisis de Information Value (IV)
+    - Variables: edad, saldo, ocupación, estado civil, educación, vivienda, préstamo
     - Validación cruzada de 10 folds
     - Métrica de evaluación: ROC-AUC (0.6680)
     - Procesamiento automático de datos (encoding, scaling, feature engineering)
@@ -558,24 +591,24 @@ with tab3:
     
     with col_interp1:
         st.success("""
-        **✅ BAJO RIESGO - CUMPLIMIENTO**
+        **✅ ALTA PROPENSIÓN - DEPÓSITO (SÍ)**
         
         Respuesta: **Sí**
         
-        - Probabilidad < 50%
-        - Cliente es más probable que cumpla
-        - Recomendación: Autorizar depósito
+        - Probabilidad > 50%
+        - Cliente muy propenso a contratar
+        - Recomendación: Ofrecer depósitos
         """)
     
     with col_interp2:
-        st.error("""
-        **⚠️ ALTO RIESGO - INCUMPLIMIENTO**
+        st.warning("""
+        **⚠️ BAJA PROPENSIÓN - NO DEPÓSITO (NO)**
         
         Respuesta: **No**
         
-        - Probabilidad ≥ 50%
-        - Cliente es más probable que incumpla
-        - Recomendación: Revisar caso manualmente
+        - Probabilidad ≤ 50%
+        - Cliente poco propenso a contratar
+        - Recomendación: Trabajar relación primero
         """)
     
     st.markdown("---")
@@ -584,37 +617,31 @@ with tab3:
     
     variables_info = pd.DataFrame({
         'Variable': [
-            'Profesión',
+            'Ocupación',
             'Estado Civil',
+            'Educación',
             'Edad',
-            'Canal Principal',
-            'Rentero',
-            'Nivel de Acceso',
-            'Cantidad de Productos',
-            'Saldo',
-            'Meses como Cliente'
+            'Tiene Vivienda',
+            'Tiene Préstamo',
+            'Saldo'
         ],
         'Tipo': [
             'Categórica',
             'Categórica',
-            'Numérica',
-            'Categórica',
-            'Categórica',
             'Categórica',
             'Numérica',
-            'Numérica',
+            'Binaria',
+            'Binaria',
             'Numérica'
         ],
-        'Opciones/Rango': [
-            'Empleado, Empresa',
-            'Soltero, Casado, Divorciado, Viudo',
+        'Ejemplo/Rango': [
+            'administrador, empresario, jubilado, etc.',
+            'casado, divorciado, soltero',
+            'primaria, secundaria, terciaria',
             '18-100 años',
-            'Sucursal, Internet, Teléfono, Móvil',
-            'Sí, No',
-            'Básico, Premium, Gold',
-            '1-20',
-            '0-1,000,000',
-            '1-600'
+            'sí, no',
+            'sí, no',
+            '0-300,000 euros'
         ]
     })
     
@@ -626,11 +653,14 @@ with tab3:
     st.markdown("""
     El modelo aplica automáticamente las siguientes transformaciones:
     
-    1. **Encoding Binario**: Conversión de variables categóricas a binarias
-    2. **One-Hot Encoding**: Expansión de variables categóricas
+    1. **Encoding Binario**: Conversión de variables Sí/No a 0/1
+    2. **One-Hot Encoding**: Expansión de categorías (ocupación, estado civil, educación)
     3. **Scaling (MinMax)**: Normalización de edad y saldo a rango [0,1]
-    4. **Feature Engineering**: Creación de quintiles y variables derivadas
-    5. **Selección de Features**: Solo 18 variables más relevantes
+    4. **Feature Engineering**: Creación de variables derivadas:
+       - norm_cant_productos = (tiene_vivienda + tiene_prestamo) / 2
+       - edad_saldo = edad_normalizada * saldo_normalizado
+    5. **Quintiles**: Discretización de edad y saldo en 5 categorías
+    6. **Selección de Features**: Solo las 18 variables más relevantes
     """)
     
     st.markdown("---")
