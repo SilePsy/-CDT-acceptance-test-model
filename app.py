@@ -39,19 +39,19 @@ def cargar_modelos_y_transformadores():
     
     try:
         # Cargar modelo entrenado
-        modelo = joblib.load(base_dir / 'lightgbm_modelo_filtrado.joblib')
+        modelo = joblib.load(base_dir / 'archivos_modelo/lightgbm_modelo_filtrado.joblib')
         
         # Cargar listado de variables
-        features_list = joblib.load(base_dir / 'features_list_lightgbm_filtrado.joblib')
+        features_list = joblib.load(base_dir / 'archivos_modelo/features_list_lightgbm_filtrado.joblib')
         
         # Cargar transformadores
-        encoders = joblib.load(base_dir / 'encoders_binarios.joblib')
-        ohe = joblib.load(base_dir / 'one_hot_encoder.joblib')
-        scaler_edad = joblib.load(base_dir / 'minmax_scaler_edad.joblib')
-        scaler_saldo = joblib.load(base_dir / 'minmax_scaler_saldo.joblib')
-        quintiles_generador = joblib.load(base_dir / 'quintiles_generador.joblib')
-        ohe_quintiles = joblib.load(base_dir / 'one_hot_encoder_quintiles.joblib')
-        config = joblib.load(base_dir / 'model_config.joblib')
+        encoders = joblib.load(base_dir / 'archivos_modelo/encoders_binarios.joblib')
+        ohe = joblib.load(base_dir / 'archivos_modelo/one_hot_encoder.joblib')
+        scaler_edad = joblib.load(base_dir / 'archivos_modelo/minmax_scaler_edad.joblib')
+        scaler_saldo = joblib.load(base_dir / 'archivos_modelo/minmax_scaler_saldo.joblib')
+        quintiles_generador = joblib.load(base_dir / 'archivos_modelo/quintiles_generador.joblib')
+        ohe_quintiles = joblib.load(base_dir / 'archivos_modelo/one_hot_encoder_quintiles.joblib')
+        config = joblib.load(base_dir / 'archivos_modelo/model_config.joblib')
         
         return {
             'modelo': modelo,
@@ -650,3 +650,4 @@ st.markdown("""
     <small>Modelo de Predicción de Incumplimiento de Depósitos | LightGBM | 2026</small>
 </div>
 """, unsafe_allow_html=True)
+
