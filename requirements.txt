@@ -1,11 +1,7 @@
+streamlit
 pandas
 numpy
+scipy
 scikit-learn
 lightgbm
 joblib
-streamlit
-matplotlib
-seaborn
-scipy
-openpyxl
-
