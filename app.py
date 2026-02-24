@@ -5,14 +5,13 @@ import joblib
 import os
 from pathlib import Path
 
-# Configurar la página
+# Configuración de la página
 st.set_page_config(
     page_title="Predicción de Depósito a Término",
-    page_icon="💰",
     layout="wide"
 )
 
-st.title("💰 Modelo de Predicción de Depósito a Término")
+st.title("Modelo de Predicción de Depósito a Término")
 st.markdown("---")
 
 # Directorio de archivos modelo
@@ -51,7 +50,7 @@ if models is None:
     st.stop()
 
 # Información sobre el modelo
-with st.expander("ℹ️ Información del Modelo"):
+with st.expander("Información del Modelo"):
     st.markdown("""
     Este modelo predice la probabilidad de que un cliente realice un depósito a término.
     
@@ -61,25 +60,24 @@ with st.expander("ℹ️ Información del Modelo"):
     - Trabajo
     - Estado Civil
     - Educación
-    - Incumplimiento
     - Tiene Vivienda
     - Tiene Préstamo
     """)
 
 # Crear formulario
 with st.form("prediction_form"):
-    st.header("📋 Ingrese los Datos del Cliente")
+    st.header("Ingrese los Datos del Cliente")
     
     # Dividir en columnas
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📊 Datos Numéricos")
         edad = st.slider("Edad", min_value=18, max_value=100, value=40, step=1)
         saldo = st.number_input("Saldo (EUR)", value=1000.0, step=100.0)
+        tiene_vivienda = st.selectbox("Tiene Vivienda", options=['no', 'si'])
+        tiene_prestamo = st.selectbox("Tiene Préstamo", options=['no', 'si'])
     
     with col2:
-        st.subheader("📋 Datos Categóricos")
         trabajo = st.selectbox(
             "Trabajo",
             options=['administrador', 'obrero', 'empresario', 'empleada_hogar', 
@@ -97,22 +95,13 @@ with st.form("prediction_form"):
             options=['primaria', 'secundaria', 'terciaria', 'desconocida']
         )
     
-    col3, col4 = st.columns(2)
-    
-    with col3:
-        incumplimiento = st.selectbox("Incumplimiento", options=['no', 'si'])
-        tiene_vivienda = st.selectbox("Tiene Vivienda", options=['no', 'si'])
-    
-    with col4:
-        tiene_prestamo = st.selectbox("Tiene Préstamo", options=['no', 'si'])
-    
     # Botón para enviar
-    submit_button = st.form_submit_button("🔮 Hacer Predicción", use_container_width=True)
+    submit_button = st.form_submit_button("Hacer Predicción", use_container_width=True)
 
 # Procesar predicción
 if submit_button:
     st.markdown("---")
-    st.header("📈 Resultado de la Predicción")
+    st.header("Resultado de la Predicción")
     
     try:
         # Crear dataframe con los datos de entrada
@@ -122,7 +111,6 @@ if submit_button:
             'trabajo': [trabajo],
             'estado_civil': [estado_civil],
             'educacion': [educacion],
-            'incumplimiento': [incumplimiento],
             'tiene_vivienda': [tiene_vivienda],
             'tiene_prestamo': [tiene_prestamo]
         }
@@ -131,7 +119,7 @@ if submit_button:
         
         # PASO 1: Aplicar LabelEncoders binarios
         # Codificar variables binarias
-        for variable in ['incumplimiento', 'tiene_vivienda', 'tiene_prestamo']:
+        for variable in ['tiene_vivienda', 'tiene_prestamo']:
             encoder = models['encoders_binarios'][variable]
             df_input[variable] = encoder.transform(df_input[variable])
         
@@ -214,33 +202,40 @@ if submit_button:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.metric(
-                "Probabilidad de Depósito a Término",
-                f"{probabilidad:.2%}",
-                delta=f"{(probabilidad - 0.5)*100:.1f}%" if probabilidad > 0.5 else f"{(probabilidad - 0.5)*100:.1f}%"
-            )
-        
-        with col2:
             if prediccion == 1:
-                st.success(f"✅ Predicción: **SÍ** realizará depósito a término")
+                st.success(f"Predicción: **SÍ** realizará depósito a término")
             else:
-                st.info(f"❌ Predicción: **NO** realizará depósito a término")
+                st.info(f"Predicción: **NO** realizará depósito a término")
         
         # Tabla de resumen
-        st.subheader("📊 Resumen de Datos Ingresados")
+        st.subheader("Resumen de Datos")
         
-        resumen_data = {
+        # Variables originales ingresadas
+        st.markdown("**Variables Ingresadas:**")
+        resumen_data_original = {
             'Variable': ['Edad', 'Saldo', 'Trabajo', 'Estado Civil', 'Educación', 
-                        'Incumplimiento', 'Tiene Vivienda', 'Tiene Préstamo'],
+                        'Tiene Vivienda', 'Tiene Préstamo'],
             'Valor': [edad, saldo, trabajo, estado_civil, educacion,
-                     incumplimiento, tiene_vivienda, tiene_prestamo]
+                     tiene_vivienda, tiene_prestamo]
         }
         
-        df_resumen = pd.DataFrame(resumen_data)
-        st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+        df_resumen_original = pd.DataFrame(resumen_data_original)
+        st.dataframe(df_resumen_original, use_container_width=True, hide_index=True)
+        
+        # Variables utilizadas por el modelo
+        st.markdown("**Variables Procesadas para el Modelo:**")
+        
+        # Crear resumen de todas las variables procesadas
+        resumen_procesadas = {
+            'Variable': list(df_model_input.columns),
+            'Valor': [f"{df_model_input.iloc[0, i]:.4f}" if isinstance(df_model_input.iloc[0, i], (int, float)) else str(df_model_input.iloc[0, i]) for i in range(len(df_model_input.columns))]
+        }
+        
+        df_resumen_procesadas = pd.DataFrame(resumen_procesadas)
+        st.dataframe(df_resumen_procesadas, use_container_width=True, hide_index=True)
         
         # Información adicional
-        with st.expander("🔍 Detalles Técnicos"):
+        with st.expander("Detalles Técnicos"):
             st.markdown(f"""
             **Procesamiento aplicado:**
             - Variables binarias codificadas: ✓
