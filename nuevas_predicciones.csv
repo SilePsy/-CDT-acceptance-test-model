@@ -1,0 +1,36 @@
+﻿edad,trabajo,estado_civil,educacion,incumplimiento,saldo,tiene_vivienda,tiene_prestamo
+68,administrador,divorciado,primaria,si,2032,No,No
+29,obrero,casado,secundaria,no,939,No,Si
+43,empresario,soltero,terciaria,si,1661,No,Si
+54,empleada_hogar,divorciado,desconocida,no,2130,No,No
+38,gestion,casado,primaria,si,667,No,No
+98,jubilado,soltero,secundaria,no,-247,Si,Si
+95,autonomo,divorciado,terciaria,si,1067,No,No
+48,servicios,casado,desconocida,no,1589,No,No
+94,estudiante,soltero,primaria,si,2988,Si,Si
+36,tecnico,divorciado,secundaria,no,1408,Si,No
+63,desempleado,casado,terciaria,si,-24,No,No
+37,desconocido,soltero,desconocida,no,897,Si,Si
+64,administrador,divorciado,primaria,si,2718,No,No
+98,obrero,casado,secundaria,no,2275,Si,No
+83,empresario,soltero,terciaria,si,-624,No,No
+21,empleada_hogar,divorciado,desconocida,no,2782,Si,No
+33,gestion,casado,primaria,si,-835,Si,Si
+89,jubilado,soltero,secundaria,no,-298,No,Si
+78,autonomo,divorciado,terciaria,si,1458,Si,No
+86,servicios,casado,desconocida,no,2145,No,No
+,,,,,,,
+,,,,,,,
+,,,,,,,
+,, ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
+, , ,,,,,
