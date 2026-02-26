@@ -200,12 +200,20 @@ if submit_button:
         
         # Mostrar resultados
         col1, col2 = st.columns(2)
-        
+
         with col1:
+            st.metric(
+                "Probabilidad de Depósito a Término",
+                f"{probabilidad:.2%}",
+                delta=f"{(probabilidad - 0.5)*100:.1f}%" if probabilidad > 0.5 else f"{(probabilidad - 0.5)*100:.1f}%"
+            )
+        
+        with col2:
             if prediccion == 1:
                 st.success(f"Predicción: **SÍ** realizará depósito a término")
             else:
                 st.info(f"Predicción: **NO** realizará depósito a término")
+
         
         # Tabla de resumen
         st.subheader("Resumen de Datos")
@@ -258,3 +266,4 @@ st.markdown("""
     <p>Desarrollado con Streamlit • Modelo LightGBM</p>
 </div>
 """, unsafe_allow_html=True)
+
