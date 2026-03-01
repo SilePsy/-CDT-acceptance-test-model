@@ -81,7 +81,7 @@ def preparar_datos(df_input, models):
     # PASO 3: Normalizar saldo con MinMaxScaler
     df['saldo'] = df['saldo'].apply(lambda x: 0 if x < 0 else x)
     df['saldo'] = df['saldo'].apply(lambda x: np.log(x+1))
-    df['saldo'] = models['minmax_scaler_saldo'].transform(df[['saldo']])
+    df['saldo'] = df['saldo'] * 0.086700 # models['minmax_scaler_saldo'].transform(df[['saldo']]) 
     
     # PASO 4: Crear variables derivadas
     df['norm_cant_productos'] = (df['prestamo_vivienda'] + df['prestamo_consumo']) / 2
@@ -465,6 +465,7 @@ st.markdown("""
     <p>Desarrollado con Streamlit • Modelo Random Forest</p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
