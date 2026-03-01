@@ -253,6 +253,21 @@ with tab1:
             df_resumen = pd.DataFrame(resumen_data)
             st.dataframe(df_resumen, use_container_width=True, hide_index=True)
             
+            # Información adicional
+            with st.expander("🔍 Detalles Técnicos"):
+                st.markdown(f"""
+                **Procesamiento aplicado:**
+                - Variables binarias codificadas: ✓
+                - Edad normalizada (MinMaxScaler): {df_model_input['edad'].values[0]:.4f}
+                - Saldo normalizado (MinMaxScaler): {df_model_input['saldo'].values[0]:.4f}
+                - Variables derivadas creadas: ✓ (norm_cant_productos, edad_saldo)
+                - One Hot Encoding categóricas: ✓
+                - Quintiles de edad generados: ✓
+                - Características del modelo: {len(df_model_input.columns)}
+                - Umbral de decisión: {UMBRAL_DECISION}
+                - Probabilidad predicha: {probabilidad:.6f}
+                """)
+            
             
         except Exception as e:
             st.error(f"Error durante la predicción: {str(e)}")
@@ -450,5 +465,6 @@ st.markdown("""
     <p>Desarrollado con Streamlit • Modelo Random Forest</p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
