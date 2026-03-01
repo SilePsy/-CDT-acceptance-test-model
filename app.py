@@ -79,6 +79,8 @@ def preparar_datos(df_input, models):
     df['edad'] = models['minmax_scaler_edad'].transform(df[['edad']])
     
     # PASO 3: Normalizar saldo con MinMaxScaler
+    df['saldo'] = df['saldo'].apply(lambda x: 0 if x < 0 else x)
+    df['saldo'] = df['saldo'].apply(lambda x: np.log(x+1))
     df['saldo'] = models['minmax_scaler_saldo'].transform(df[['saldo']])
     
     # PASO 4: Crear variables derivadas
@@ -448,4 +450,5 @@ st.markdown("""
     <p>Desarrollado con Streamlit • Modelo Random Forest</p>
 </div>
 """, unsafe_allow_html=True)
+
 
